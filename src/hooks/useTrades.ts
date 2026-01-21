@@ -12,7 +12,7 @@ export interface Trade {
   pnl: number;
   pnl_percent: number | null;
   tx_hash: string | null;
-  timestamp: string;
+  traded_at: string;
 }
 
 export function useTrades() {
@@ -35,7 +35,7 @@ export function useTrades() {
           .from('trades')
           .select('*')
           .eq('user_id', user.id)
-          .order('timestamp', { ascending: false })
+          .order('traded_at', { ascending: false })
           .limit(100);
 
         if (fetchError) throw fetchError;

@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS public.trades (
   pnl DECIMAL DEFAULT 0,
   pnl_percent DECIMAL,
   tx_hash TEXT,
-  timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  traded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -50,7 +50,7 @@ CREATE TABLE IF NOT EXISTS public.bot_settings (
 );
 
 -- Indexes for performance
-CREATE INDEX IF NOT EXISTS idx_trades_user_timestamp ON public.trades(user_id, timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_trades_user_traded_at ON public.trades(user_id, traded_at DESC);
 CREATE INDEX IF NOT EXISTS idx_positions_user_status ON public.positions(user_id, status);
 CREATE INDEX IF NOT EXISTS idx_trades_mint ON public.trades(mint);
 
