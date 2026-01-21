@@ -1,0 +1,49 @@
+project_id = "ypfjppjiutdfrcpbszxi"
+
+[functions.bot-api]
+verify_jwt = false
+
+[functions.token-prices]
+verify_jwt = false
+
+[functions.telegram-notify]
+verify_jwt = false
+
+[functions.solana-wallet]
+verify_jwt = false
+
+[functions.wallet-transactions]
+verify_jwt = false
+
+[functions.trading-assistant]
+verify_jwt = false
+
+[functions.token-analysis]
+verify_jwt = false
+
+[functions.token-holders]
+verify_jwt = false
+
+[functions.sol-price]
+verify_jwt = false
+
+[functions.wallet-scanner]
+verify_jwt = false
+
+[functions.token-chart]
+verify_jwt = false
+
+[functions.copy-trade-executor]
+verify_jwt = false
+
+[functions.pumpfun-scanner]
+verify_jwt = false
+
+[functions.scanner-trade]
+verify_jwt = false
+
+[functions.position-monitor]
+verify_jwt = false
+
+[functions.realtime-price]
+verify_jwt = false
