@@ -89,3 +89,7 @@ export function usePositions() {
 
   return { positions, loading, error };
 }
+
+// Export alias for backwards compatibility
+export const useOpenPositions = usePositions;
+
