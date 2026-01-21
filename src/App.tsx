@@ -15,6 +15,7 @@ import Performance from "./pages/Performance";
 import Settings from "./pages/Settings";
 import Assistant from "./pages/Assistant";
 import Scanner from "./pages/Scanner";
+import BotControl from "./pages/BotControl";
 import Logs from "./pages/Logs";
 import NotFound from "./pages/NotFound";
 
@@ -91,6 +92,14 @@ const App = () => (
                 element={
                   <ProtectedRoute>
                     <Scanner />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/bot-control"
+                element={
+                  <ProtectedRoute>
+                    <BotControl />
                   </ProtectedRoute>
                 }
               />

@@ -1,62 +1,91 @@
-import { useQuery } from '@tanstack/react-query';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 
 export interface Position {
   id: string;
-  user_id: string;
-  wallet_id: string | null;
-  token_mint: string;
-  token_symbol: string;
-  amount: number;
-  avg_buy_price: number | null;
+  mint: string;
+  symbol: string | null;
+  entry_price: number;
   current_price: number | null;
-  unrealized_pnl_sol: number | null;
-  unrealized_pnl_percent: number | null;
-  is_open: boolean;
-  created_at: string;
+  amount: number;
+  pnl: number;
+  pnl_percent: number;
+  status: 'open' | 'closed';
+  opened_at: string;
+  closed_at: string | null;
   updated_at: string;
 }
 
 export function usePositions() {
   const { user } = useAuth();
+  const [positions, setPositions] = useState<Position[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  return useQuery({
-    queryKey: ['positions', user?.id],
-    queryFn: async () => {
-      if (!user) return [];
-      
-      const { data, error } = await supabase
-        .from('positions')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('updated_at', { ascending: false });
+  useEffect(() => {
+    if (!user) {
+      setPositions([]);
+      setLoading(false);
+      return;
+    }
 
-      if (error) throw error;
-      return data as Position[];
-    },
-    enabled: !!user,
-  });
-}
+    // Initial fetch - only open positions
+    const fetchPositions = async () => {
+      try {
+        const { data, error: fetchError } = await supabase
+          .from('positions')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('status', 'open')
+          .order('opened_at', { ascending: false });
 
-export function useOpenPositions() {
-  const { user } = useAuth();
+        if (fetchError) throw fetchError;
+        setPositions(data || []);
+        setError(null);
+      } catch (err) {
+        console.error('Error fetching positions:', err);
+        setError(err instanceof Error ? err.message : 'Failed to fetch positions');
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  return useQuery({
-    queryKey: ['positions', 'open', user?.id],
-    queryFn: async () => {
-      if (!user) return [];
-      
-      const { data, error } = await supabase
-        .from('positions')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('is_open', true)
-        .order('updated_at', { ascending: false });
+    fetchPositions();
 
-      if (error) throw error;
-      return data as Position[];
-    },
-    enabled: !!user,
-  });
+    // Subscribe to real-time updates
+    const subscription = supabase
+      .channel('positions-channel')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',  // INSERT, UPDATE, DELETE
+          schema: 'public',
+          table: 'positions',
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            setPositions((prev) => [payload.new as Position, ...prev]);
+          } else if (payload.eventType === 'UPDATE') {
+            setPositions((prev) =>
+              prev.map((pos) =>
+                pos.id === payload.new.id ? (payload.new as Position) : pos
+              )
+            );
+          } else if (payload.eventType === 'DELETE') {
+            setPositions((prev) =>
+              prev.filter((pos) => pos.id !== payload.old.id)
+            );
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [user]);
+
+  return { positions, loading, error };
 }

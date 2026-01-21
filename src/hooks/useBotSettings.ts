@@ -1,85 +1,135 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 
 export interface BotSettings {
-  id: string;
   user_id: string;
-  api_key: string;
+  is_running: boolean;
+  auto_trade: boolean;
+  paper_mode: boolean;
+  max_position_size: number;
   stop_loss_percent: number;
   take_profit_percent: number;
-  max_position_size_sol: number;
-  auto_sell_enabled: boolean;
-  telegram_notifications: boolean;
-  created_at: string;
+  max_positions: number;
   updated_at: string;
 }
 
+const DEFAULT_SETTINGS: Partial<BotSettings> = {
+  is_running: false,
+  auto_trade: false,
+  paper_mode: true,
+  max_position_size: 0.1,
+  stop_loss_percent: 10,
+  take_profit_percent: 20,
+  max_positions: 5,
+};
+
 export function useBotSettings() {
   const { user } = useAuth();
+  const [settings, setSettings] = useState<BotSettings | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  return useQuery({
-    queryKey: ['bot-settings', user?.id],
-    queryFn: async () => {
-      if (!user) return null;
-      
-      const { data, error } = await supabase
+  const fetchSettings = useCallback(async () => {
+    if (!user) {
+      setSettings(null);
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const { data, error: fetchError } = await supabase
         .from('bot_settings')
         .select('*')
         .eq('user_id', user.id)
         .maybeSingle();
 
-      if (error) throw error;
-      return data as BotSettings | null;
-    },
-    enabled: !!user,
-  });
-}
+      if (fetchError) throw fetchError;
 
-export function useUpdateBotSettings() {
-  const { user } = useAuth();
-  const queryClient = useQueryClient();
+      if (!data) {
+        // Create default settings
+        const newSettings = { ...DEFAULT_SETTINGS, user_id: user.id };
+        const { data: created, error: createError } = await supabase
+          .from('bot_settings')
+          .insert([newSettings])
+          .select()
+          .single();
 
-  return useMutation({
-    mutationFn: async (updates: Partial<BotSettings>) => {
-      if (!user) throw new Error('Not authenticated');
+        if (createError) throw createError;
+        setSettings(created);
+      } else {
+        setSettings(data);
+      }
 
-      const { data, error } = await supabase
+      setError(null);
+    } catch (err) {
+      console.error('Error fetching bot settings:', err);
+      setError(err instanceof Error ? err.message : 'Failed to fetch settings');
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    fetchSettings();
+
+    if (!user) return;
+
+    // Subscribe to real-time updates
+    const subscription = supabase
+      .channel('bot-settings-channel')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'bot_settings',
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          setSettings(payload.new as BotSettings);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [user, fetchSettings]);
+
+  const updateSettings = async (updates: Partial<BotSettings>) => {
+    if (!user) return { success: false, error: 'No user logged in' };
+
+    try {
+      const { data, error: updateError } = await supabase
         .from('bot_settings')
         .update(updates)
         .eq('user_id', user.id)
         .select()
         .single();
 
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['bot-settings'] });
-    },
-  });
-}
+      if (updateError) throw updateError;
 
-export function useRegenerateApiKey() {
-  const { user } = useAuth();
-  const queryClient = useQueryClient();
+      setSettings(data);
+      return { success: true, data };
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Failed to update settings';
+      setError(errorMsg);
+      return { success: false, error: errorMsg };
+    }
+  };
 
-  return useMutation({
-    mutationFn: async () => {
-      if (!user) throw new Error('Not authenticated');
+  const toggleBot = async () => {
+    if (!settings) return { success: false, error: 'Settings not loaded' };
+    return updateSettings({ is_running: !settings.is_running });
+  };
 
-      const { data, error } = await supabase
-        .from('bot_settings')
-        .update({ api_key: crypto.randomUUID() })
-        .eq('user_id', user.id)
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['bot-settings'] });
-    },
-  });
+  return {
+    settings,
+    loading,
+    error,
+    updateSettings,
+    toggleBot,
+    refetch: fetchSettings,
+  };
 }

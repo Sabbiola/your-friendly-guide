@@ -1,46 +1,77 @@
-import { useQuery } from '@tanstack/react-query';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 
 export interface Trade {
   id: string;
-  user_id: string;
-  wallet_id: string | null;
-  token_mint: string;
-  token_symbol: string;
-  trade_type: 'buy' | 'sell';
-  amount_token: number;
-  amount_sol: number;
-  price_usd: number | null;
-  tx_signature: string | null;
-  status: string;
-  pnl_sol: number | null;
+  mint: string;
+  symbol: string | null;
+  type: 'buy' | 'sell';
+  price: number;
+  amount: number;
+  pnl: number;
   pnl_percent: number | null;
-  created_at: string;
+  tx_hash: string | null;
+  timestamp: string;
 }
 
-export function useTrades(limit = 50) {
+export function useTrades() {
   const { user } = useAuth();
+  const [trades, setTrades] = useState<Trade[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  return useQuery({
-    queryKey: ['trades', user?.id, limit],
-    queryFn: async () => {
-      if (!user) return [];
-      
-      const { data, error } = await supabase
-        .from('trades')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(limit);
+  useEffect(() => {
+    if (!user) {
+      setTrades([]);
+      setLoading(false);
+      return;
+    }
 
-      if (error) throw error;
-      return data as Trade[];
-    },
-    enabled: !!user,
-  });
-}
+    // Initial fetch
+    const fetchTrades = async () => {
+      try {
+        const { data, error: fetchError } = await supabase
+          .from('trades')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('timestamp', { ascending: false })
+          .limit(100);
 
-export function useRecentTrades(limit = 10) {
-  return useTrades(limit);
+        if (fetchError) throw fetchError;
+        setTrades(data || []);
+        setError(null);
+      } catch (err) {
+        console.error('Error fetching trades:', err);
+        setError(err instanceof Error ? err.message : 'Failed to fetch trades');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchTrades();
+
+    // Subscribe to real-time updates
+    const subscription = supabase
+      .channel('trades-channel')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'trades',
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          setTrades((prev) => [payload.new as Trade, ...prev]);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [user]);
+
+  return { trades, loading, error };
 }
