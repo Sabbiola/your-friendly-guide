@@ -364,13 +364,16 @@ export function usePumpfunScanner() {
     return () => clearInterval(interval);
   }, [isAutoScan, user, settings.refreshIntervalSeconds, scan]);
 
-  // Load settings and cached tokens on mount
+  // Load settings and cached tokens on mount (ONCE only)
   useEffect(() => {
     if (user) {
       loadSettings();
+      // Load cached tokens ONLY on initial mount, not after every scan
+      // This prevents overwriting the merge strategy
       loadCachedTokens();
     }
-  }, [user, loadSettings, loadCachedTokens]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]); // Only run when user changes, NOT when loadSettings/loadCachedTokens change
 
   return {
     tokens: sortedTokens,
