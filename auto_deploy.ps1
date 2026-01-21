@@ -1,6 +1,6 @@
 $ErrorActionPreference = "Stop"
 
-# 1. Configura Git Path trovato
+# 1. Configura Git Path
 $GitPath = "C:\Users\dennis.bobu\AppData\Local\Programs\Git\bin\git.exe"
 
 Write-Host "Uso git da: $GitPath" -ForegroundColor Cyan
@@ -9,29 +9,28 @@ Write-Host "Uso git da: $GitPath" -ForegroundColor Cyan
 $RepoDir = "c:\Users\dennis.bobu\Desktop\solana\your-friendly-guide"
 Set-Location $RepoDir
 
-# 3. Inizializza Git se manca (caso ZIP)
-if (-not (Test-Path ".git")) {
-    Write-Host "Inizializzo repository Git..." -ForegroundColor Yellow
-    & $GitPath init
-    & $GitPath branch -M main
-    & $GitPath remote add origin https://github.com/Sabbiola/your-friendly-guide.git
-}
-
-# 4. Stage e Commit
-Write-Host "Preparazione file..." -ForegroundColor Cyan
+# 3. Stage e Commit (nel caso non fossero passati prima)
+Write-Host "Assicuro che tutto sia nell'area di stage..." -ForegroundColor Cyan
 & $GitPath add .
-& $GitPath commit -m "fix: stability improvements for token scanner (persistence + retries)"
-
-# 5. Push
-Write-Host "Tento il push su GitHub..." -ForegroundColor Yellow
-Write-Host "NOTA: Potrebbe aprirsi una finestra per il login." -ForegroundColor Cyan
 try {
-    & $GitPath push -u origin main
+    & $GitPath commit -m "fix: stability improvements for token scanner (persistence + retries)"
 } catch {
-    Write-Host "Push standard fallito (probabilmente conflitti di storia dovuti allo ZIP)." -ForegroundColor Red
-    Write-Host "Provo con --force (sovrascrive la remote history con questa versione locale)..." -ForegroundColor Yellow
-    & $GitPath push -u origin main --force
+    Write-Host "Niente da committare (già fatto)." -ForegroundColor Gray
 }
 
-Write-Host "Finito! Se ha funzionato, Vercel dovrebbe aggiornarsi tra poco." -ForegroundColor Green
+# 4. Force Push
+# Usiamo --force perché abbiamo scaricato lo ZIP e non abbiamo la storia completa.
+# Questo sovrascriverà la history remota con quella locale corretta.
+Write-Host "Eseguo FORCE PUSH su GitHub..." -ForegroundColor Yellow
+Write-Host "NOTA: Questo sovrascriverà la history remota. Se ti chiede la password, inseriscila." -ForegroundColor Cyan
+
+& $GitPath push -u origin main --force
+
+if ($LASTEXITCODE -eq 0) {
+    Write-Host "✅ PUSH COMPLETATO CON SUCCESSO!" -ForegroundColor Green
+    Write-Host "Vercel dovrebbe aggiornarsi tra circa 2 minuti." -ForegroundColor Green
+} else {
+    Write-Host "❌ Errore durante il push." -ForegroundColor Red
+}
+
 Read-Host "Premi Invio per chiudere"
